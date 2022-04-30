@@ -13,7 +13,7 @@ with io.open(readme_path, encoding='utf-8') as readme_file:
 with io.open(version_path, encoding='utf-8') as version_file:
     version = version_file.read().strip()
 
-base_url = 'https://github.com/sendgrid/'
+base_url = 'https://github.com/kaushil24/'
 
 copy_file(version_path,
           os.path.join(dir_path, 'python_http_client', 'VERSION.txt'),

@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](http://semver.org/).
+[2022-04-30] Version 3.3.8
+--------------------------
+**Library - Chore**
+- Passing `global_update_request_headers` flag to toggle original client's request_headers update.
+
 
 [2022-03-09] Version 3.3.7
 --------------------------
