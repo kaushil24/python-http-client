@@ -224,42 +224,48 @@ class Client(object):
                     query_params=None,
                     request_headers=None,
                     timeout=None,
+                    global_update_request_headers=True,
                     **_):
                 """Make the API call
                 :param timeout: HTTP request timeout. Will be propagated to
                     urllib client
                 :type timeout: float
                 :param request_headers: HTTP headers. Will be merged into
-                    current client object state
+                    current client object state only if global_update_request_headers
+                    set `True`
                 :type request_headers: dict
                 :param query_params: HTTP query parameters
                 :type query_params: dict
                 :param request_body: HTTP request body
                 :type request_body: string or json-serializable object
+                :param global_update_request_headers: Update client  object request_headers state if 
+                    set `True`. Default `True`. If set `False` the request_header passed will be use
+                    only for that request 
                 :param kwargs:
                 :return: Response object
                 """
-                if request_headers:
+                if request_headers and not global_update_request_headers:
                     self._update_headers(request_headers)
+                    request_headers = self.request_headers
 
                 if request_body is None:
                     data = None
                 else:
                     # Don't serialize to a JSON formatted str
                     # if we don't have a JSON Content-Type
-                    if 'Content-Type' in self.request_headers and \
-                            self.request_headers['Content-Type'] != \
+                    if 'Content-Type' in request_headers and \
+                            request_headers['Content-Type'] != \
                             'application/json':
                         data = request_body.encode('utf-8')
                     else:
-                        self.request_headers.setdefault(
+                        request_headers.setdefault(
                             'Content-Type', 'application/json')
                         data = json.dumps(request_body).encode('utf-8')
 
                 opener = urllib.build_opener()
                 request = urllib.Request(
                     self._build_url(query_params),
-                    headers=self.request_headers,
+                    headers=request_headers if global_update_request_headers else request_headers,
                     data=data,
                 )
                 request.get_method = lambda: method
