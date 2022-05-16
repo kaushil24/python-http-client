@@ -2,6 +2,7 @@
 import json
 import logging
 from .exceptions import handle_error
+import requests
 
 try:
     # Python 3
@@ -20,15 +21,15 @@ _logger = logging.getLogger(__name__)
 class Response(object):
     """Holds the response from an API call."""
 
-    def __init__(self, response):
+    def __init__(self, response: requests.Response):
         """
         :param response: The return value from a open call
                          on a urllib.build_opener()
         :type response:  urllib response object
         """
-        self._status_code = response.getcode()
-        self._body = response.read()
-        self._headers = response.info()
+        self._status_code = response.status_code
+        self._body = response.content
+        self._headers = response.headers
 
     @property
     def status_code(self):
@@ -74,7 +75,9 @@ class Client(object):
                  version=None,
                  url_path=None,
                  append_slash=False,
-                 timeout=None):
+                 timeout=None,
+                 proxies=None,
+                 ):
         """
         :param host: Base URL for the api. (e.g. https://api.sendgrid.com)
         :type host:  string
@@ -97,6 +100,14 @@ class Client(object):
         # APPEND SLASH set
         self.append_slash = append_slash
         self.timeout = timeout
+        self.session = requests.Session()
+        if proxies:
+            assert isinstance(proxies, dict)
+            self.session.proxies = proxies
+        self.adapter = requests.adapters.HTTPAdapter(
+            pool_connections=25,
+            pool_maxsize=25,
+        )
 
     def _build_versioned_url(self, url):
         """Subclass this function for your own needs.
@@ -159,7 +170,7 @@ class Client(object):
                       append_slash=self.append_slash,
                       timeout=self.timeout)
 
-    def _make_request(self, opener, request, timeout=None):
+    def _make_request(self, request: requests.Request, timeout=None):
         """Make the API call and return the response. This is separated into
            it's own function, so we can mock it easily for testing.
 
@@ -173,12 +184,14 @@ class Client(object):
         """
         timeout = timeout or self.timeout
         try:
-            return opener.open(request, timeout=timeout)
+            self.session.mount(request.url, self.adapter)
+            prepared_request = self.session.prepare_request(request)
+            return self.session.send(prepared_request)#, stream=False, timeout=self.timeout)
         except HTTPError as err:
             exc = handle_error(err)
             exc.__cause__ = None
             _logger.debug('{method} Response: {status} {body}'.format(
-                method=request.get_method(),
+                method=prepared_request.method,
                 status=exc.status_code,
                 body=exc.body))
             raise exc
@@ -256,17 +269,16 @@ class Client(object):
                             'Content-Type', 'application/json')
                         data = json.dumps(request_body).encode('utf-8')
 
-                opener = urllib.build_opener()
-                request = urllib.Request(
-                    self._build_url(query_params),
+                request = requests.Request(
+                    method=method,
+                    url=self._build_url(query_params),
                     headers=self.request_headers,
-                    data=data,
+                    data=data
                 )
-                request.get_method = lambda: method
 
                 _logger.debug('{method} Request: {url}'.format(
                     method=method,
-                    url=request.get_full_url()))
+                    url=request.url))
                 if request.data:
                     _logger.debug('PAYLOAD: {data}'.format(
                         data=request.data))
@@ -274,7 +286,7 @@ class Client(object):
                     headers=request.headers))
 
                 response = Response(
-                    self._make_request(opener, request, timeout=timeout)
+                    self._make_request(request, timeout=timeout)
                 )
 
                 _logger.debug('{method} Response: {status} {body}'.format(
